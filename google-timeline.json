@@ -1,0 +1,69 @@
+{
+  "eshome": "https://192.168.100.20:9200/",
+  "indices": [
+    {
+      "name": "google-timeline",
+      "pipeline": "pl_google-timeline",
+      "settings": {
+        "index": {
+          "number_of_replicas": 0
+        }
+      }
+    }
+  ],
+  "_ingest": {
+    "pipelines": [
+      {
+        "name": "pl_google-timeline",
+        "definition": {
+          "description": "Pipeline to ingest Google Timeline history data",
+          "processors": [
+            {
+              "date": {
+                "field": "timestamp",
+                "formats": ["ISO8601"],
+                "description": "Ensure the timestamp from the record is used as the timestamp field"
+              }
+            },
+            {
+              "date_index_name": {
+                "field": "@timestamp",
+                "date_rounding": "y",
+                "index_name_prefix": "google-timeline-",
+                "index_name_format": "yyyy",
+                "description": "Use a yearly index, with a base name of google-timeline-"
+              }
+            },
+            {
+              "set": {
+                "field": "location.lat",
+                "value": "0",
+                "description": "Add a placeholder value to loccation.lat"
+              }
+            },
+            {
+              "set": {
+                "field": "location.lon",
+                "value": "0",
+                "description": "Add a placeholder value to locationl.lon"
+              }
+            },
+            {
+              "script": {
+                "lang": "painless",
+                "source": "if (ctx.latitudeE7 != null) {\r\n  double lat = ctx.latitudeE7 / 10000000.0;\r\n  ctx.location.lat = lat;\r\n  double lon = ctx.longitudeE7 / 10000000.0;\r\n  ctx.location.lon = lon;\r\n  \r\n  // remove the original \"latitudeE7\" field\r\n  ctx.remove(\"latitudeE7\");\r\n  ctx.remove(\"longitudeE7\");\r\n}",
+                "tag": "location",
+                "description": "Convert the Google latituteE7 and longitudeE7 values to doubles and store to location"
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "_enrich": {
+    "policies": [
+      
+    ]
+  }
+}

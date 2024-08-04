@@ -266,7 +266,7 @@ The final step is to ingest the data into ElasticSearch.
 ```powershell
 $Files = Get-ChildItem Records-*.ndjson
 foreach ($File in $Files) {
-    $Locations = Get-Content $File.FullName | ConvertFrom-Json -Depth 10 
+    $Locations = Get-Content $File.FullName | ConvertFrom-Json -Depth 10
     $Result = Invoke-EsBulkIndexRequest -EsConfig $EsConfig -EsCreds $EsCred -IndexName 'google-timeline' -InputObject $Locations
     Clear-Variable Locations
     [GC]::Collect()
@@ -275,6 +275,74 @@ foreach ($File in $Files) {
 
 The Invoke-EsBulkIndexRequest will batch the operation in lots of 10k at a time inserting into the ElasticSearch Indices. Once the ingest is complete you can _play_ around with your data.
 
-### Mapping
+## Mapping
 
-You can present your data on a Map using the Kibana Map Feature.
+You can present your data on a Map using the Kibana Maps Feature. Create a new _Map_ and add a layer with the **google-timeline** Data View as it's source, and the **location** field as the geo_point data.
+
+Customise any other settings you would like to configure, such as the map type, size and colour of your geo-points, etc. Once you have it configured to your liking, explore your location history.
+
+I was able to create a map of a recent trip across the Simpson Desert using this by selecting the appropriate date range for the trip:
+
+![Simpson Desert Crossing - Madigan Line](images/map-simpson-madigan.png)
+
+## Searching for Locations Near a Specific Point
+
+The whole point of this excercise for me was to determine which hours I worked from home. To do this I would need to get my timesheet data and match it up with days I did not work in the office. At a basic level, you can just do a search as follows:
+
+```json
+GET /google-timeline-*/_search
+{
+  "query": {
+    "bool": {
+      "must": {
+        "match_all": {}
+      },
+      "filter":
+          {
+            "geo_distance": {
+              "distance": "100m",
+              "location": {
+                "lat": -37.81770,
+                "lon": 144.96728
+              }
+            }
+
+      }
+    }
+  }
+}
+```
+
+Obviously you need to use the Lattitude and Longitude for your specific point of interest. I have used _Flinders Street Station_ for the above example. Also, the above assumes the following:
+
+- Index pattern is `google-timeline-*`
+- Geo-point field name is `location`
+
+I have used a distance of _100m_ because if this is your place of work, you should be within this distance for at least some part of the day. Both of my recent offices have been near a major
+arterial, so making it greater than a couple of hundred meters would throw up false-positive matches.
+
+### Visualisation as Table
+
+You can create a new _Lens_ visualisation, and set the visualisation type as _Table_ with Rows set to `@timestamp`, setting the minimum interval to _Day_, and Metrics set to `Count of Records`.
+Add the following Query DSL filter to the visualisation:
+
+```json
+{
+  "bool": {
+    "must": {
+      "match_all": {}
+    },
+    "filter": {
+      "geo_distance": {
+        "distance": "100m",
+        "location": {
+          "lat": -37.81770,
+          "lon": 144.96728
+        }
+      }
+    }
+  }
+}
+```
+
+This will give you the number of geo points recorded at this location for each day of the selected time range.
